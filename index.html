@@ -129,7 +129,7 @@
 
                 if (questionPaper) {
                     const questionPaperLink = document.createElement("a");
-                    questionPaperLink.href = `https://github.com/${repoOwner}/${repoName}/blob/main/${questionPaper.name}`;
+                    questionPaperLink.href = `https://github.com/${repoOwner}/${repoName}/raw/main/${questionPaper.name}`;  // Changed to raw
                     questionPaperLink.target = "_blank";
                     questionPaperLink.textContent = questionPaper.name;
                     questionPaperLink.className = "file-link question-paper-link";
@@ -137,7 +137,7 @@
                 }
                 if (markScheme) {
                     const markSchemeLink = document.createElement("a");
-                    markSchemeLink.href = `https://github.com/${repoOwner}/${repoName}/blob/main/${markScheme.name}`;
+                    markSchemeLink.href = `https://github.com/${repoOwner}/${repoName}/raw/main/${markScheme.name}`;  // Changed to raw
                     markSchemeLink.target = "_blank";
                     markSchemeLink.textContent = markScheme.name;
                     markSchemeLink.className = "file-link mark-scheme-link";
@@ -150,7 +150,7 @@
             if (ctapFiles.length === 0) {
                 ctapFilesContainer.textContent = "No PDF files found in this category.";
             } else {
-                const displayedPairs = new Set(); // To track displayed pairs to avoid duplicates.
+                const displayedPairs = new Set();
 
                 ctapFiles.forEach(file => {
                     if (file.name.toLowerCase().includes("mark scheme")) {
@@ -167,7 +167,7 @@
                 // Display any question papers without a matching mark scheme
                 ctapFiles.forEach(file => {
                     if (!file.name.toLowerCase().includes("mark scheme") && !displayedPairs.has(file.name)) {
-                        createAndAppendFilePair(ctapFilesContainer, file, null); // null for mark scheme
+                        createAndAppendFilePair(ctapFilesContainer, file, null);
                     }
                 });
             }
@@ -177,7 +177,7 @@
                 csFilesContainer.textContent = "No PDF files found in this category.";
             } else {
                 const displayedPairs = new Set();
-                 csFiles.forEach(file => {
+                csFiles.forEach(file => {
                     if (file.name.toLowerCase().includes("mark scheme")) {
                         const questionPaperName = file.name.toLowerCase().replace("mark scheme ", "");
                         const matchingQuestionPaper = csFiles.find(q => q.name.toLowerCase() === questionPaperName);
@@ -192,7 +192,7 @@
                 // Display any question papers without a matching mark scheme
                 csFiles.forEach(file => {
                     if (!file.name.toLowerCase().includes("mark scheme") && !displayedPairs.has(file.name)) {
-                        createAndAppendFilePair(csFilesContainer, file, null); // null for mark scheme
+                        createAndAppendFilePair(csFilesContainer, file, null);
                     }
                 });
             }
