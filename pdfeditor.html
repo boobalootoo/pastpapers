@@ -39,7 +39,6 @@
         <label>Choose PDF:
             <select id="pdfSelector">
                 <option value="Computational thinking, algorithms and programming 2018.pdf">CTAP 2018</option>
-                <!-- Add more options as needed -->
             </select>
         </label>
         <button onclick="prevPage()">Previous</button>
@@ -52,8 +51,10 @@
         <label>Thickness:
             <input type="range" id="penWidth" min="1" max="10" value="2">
         </label>
-        <button onclick="clearCanvas()">Clear</button>
-        <button onclick="saveAsImage()">Export Drawing</button>
+        <button onclick="undo()">Undo</button>
+        <button onclick="redo()">Redo</button>
+        <button onclick="deleteAllEdits()">Delete All Edits</button>
+        <button onclick="downloadFullPDF()">Download Paper</button>
     </div>
 
     <div id="pdf-container">
@@ -62,6 +63,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
         const urlBase = "https://boobalootoo.github.io/pastpapers/";
         const pdfCanvas = document.getElementById('pdf-canvas');
@@ -73,32 +75,97 @@
         let currentPage = 1;
         let totalPages = 0;
         let scale = 1.5;
+        let currentPDF = "";
 
-        // Drawing vars
         let isDrawing = false;
         let lastX = 0, lastY = 0;
 
-        overlay.addEventListener('mousedown', e => {
-            isDrawing = true;
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-        });
+        let history = [];
+        let redoStack = [];
 
-        overlay.addEventListener('mousemove', e => {
+        function saveState() {
+            history.push(ctx.getImageData(0, 0, overlay.width, overlay.height));
+            redoStack = [];
+        }
+
+        function undo() {
+            if (history.length > 0) {
+                redoStack.push(ctx.getImageData(0, 0, overlay.width, overlay.height));
+                const imageData = history.pop();
+                ctx.putImageData(imageData, 0, 0);
+                saveDrawing();
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                history.push(ctx.getImageData(0, 0, overlay.width, overlay.height));
+                const imageData = redoStack.pop();
+                ctx.putImageData(imageData, 0, 0);
+                saveDrawing();
+            }
+        }
+
+        function saveDrawing() {
+            const dataURL = overlay.toDataURL();
+            localStorage.setItem(`${currentPDF}-page-${currentPage}`, dataURL);
+        }
+
+        function loadDrawing() {
+            const saved = localStorage.getItem(`${currentPDF}-page-${currentPage}`);
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            if (saved) {
+                const img = new Image();
+                img.onload = () => ctx.drawImage(img, 0, 0);
+                img.src = saved;
+            }
+            history = [];
+            redoStack = [];
+        }
+
+        overlay.addEventListener('mousedown', startDraw);
+        overlay.addEventListener('mousemove', draw);
+        overlay.addEventListener('mouseup', stopDraw);
+        overlay.addEventListener('mouseout', stopDraw);
+
+        overlay.addEventListener('touchstart', e => startDraw(e.touches[0]));
+        overlay.addEventListener('touchmove', e => {
+            draw(e.touches[0]);
+            e.preventDefault();
+        }, { passive: false });
+        overlay.addEventListener('touchend', stopDraw);
+
+        function startDraw(e) {
+            isDrawing = true;
+            const rect = overlay.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            saveState();
+        }
+
+        function draw(e) {
             if (!isDrawing) return;
+            const rect = overlay.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.lineTo(x, y);
             ctx.strokeStyle = document.getElementById("penColor").value;
             ctx.lineWidth = document.getElementById("penWidth").value;
+            ctx.lineCap = "round";
             ctx.stroke();
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-        });
 
-        overlay.addEventListener('mouseup', () => isDrawing = false);
-        overlay.addEventListener('mouseout', () => isDrawing = false);
+            lastX = x;
+            lastY = y;
+        }
 
-        function clearCanvas() {
-            ctx.clearRect(0, 0, overlay.width, overlay.height);
+        function stopDraw() {
+            if (isDrawing) {
+                isDrawing = false;
+                saveDrawing();
+            }
         }
 
         function setupOverlay() {
@@ -106,24 +173,19 @@
             overlay.height = pdfCanvas.height;
         }
 
-        function saveAsImage() {
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = pdfCanvas.width;
-            tempCanvas.height = pdfCanvas.height;
-
-            const tempCtx = tempCanvas.getContext("2d");
-            tempCtx.drawImage(pdfCanvas, 0, 0);
-            tempCtx.drawImage(overlay, 0, 0);
-
-            const img = tempCanvas.toDataURL("image/png");
-
-            const link = document.createElement("a");
-            link.href = img;
-            link.download = `annotated_page_${currentPage}.png`;
-            link.click();
+        function deleteAllEdits() {
+            if (confirm("Are you sure you want to delete all edits?")) {
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith(currentPDF + "-page-")) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                location.reload();
+            }
         }
 
         async function loadPDF(url) {
+            currentPDF = decodeURIComponent(url.split("/").pop());
             pdfDoc = await pdfjsLib.getDocument(url).promise;
             totalPages = pdfDoc.numPages;
             currentPage = 1;
@@ -147,7 +209,9 @@
                 viewport
             };
             await page.render(renderContext).promise;
+
             setupOverlay();
+            loadDrawing();
             pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
         }
 
@@ -170,7 +234,42 @@
             loadPDF(urlBase + encodeURIComponent(selectedFile));
         });
 
-        // Initial load
+        async function downloadFullPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            for (let i = 1; i <= totalPages; i++) {
+                const page = await pdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale });
+                const renderCanvas = document.createElement("canvas");
+                const renderCtx = renderCanvas.getContext("2d");
+                renderCanvas.width = viewport.width;
+                renderCanvas.height = viewport.height;
+
+                await page.render({ canvasContext: renderCtx, viewport }).promise;
+
+                const overlayImg = localStorage.getItem(`${currentPDF}-page-${i}`);
+                if (overlayImg) {
+                    const tempCtx = renderCanvas.getContext("2d");
+                    const img = new Image();
+                    img.src = overlayImg;
+                    await new Promise(resolve => {
+                        img.onload = () => {
+                            tempCtx.drawImage(img, 0, 0);
+                            resolve();
+                        };
+                    });
+                }
+
+                const imgData = renderCanvas.toDataURL("image/png");
+                if (i > 1) doc.addPage();
+                doc.addImage(imgData, "PNG", 10, 10, 190, 0);
+            }
+
+            doc.save(`${currentPDF}_annotated.pdf`);
+        }
+
+        // Load initial PDF
         loadPDF(urlBase + encodeURIComponent(document.getElementById('pdfSelector').value));
     </script>
 </body>
