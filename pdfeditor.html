@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive PDF Annotator</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        #pdf-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin: auto;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+        }
+        #overlay {
+            position: absolute;
+            left: 0;
+            top: 0;
+            cursor: crosshair;
+        }
+        #tools {
+            text-align: center;
+            margin: 10px;
+        }
+        #tools button, #tools select, #tools input[type=color], #tools input[type=range] {
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="tools">
+        <label>Choose PDF:
+            <select id="pdfSelector">
+                <option value="Computational thinking, algorithms and programming 2018.pdf">CTAP 2018</option>
+                <!-- Add more options as needed -->
+            </select>
+        </label>
+        <button onclick="prevPage()">Previous</button>
+        <span id="pageInfo">Page 1</span>
+        <button onclick="nextPage()">Next</button>
+        |
+        <label>Color:
+            <input type="color" id="penColor" value="#ff0000">
+        </label>
+        <label>Thickness:
+            <input type="range" id="penWidth" min="1" max="10" value="2">
+        </label>
+        <button onclick="clearCanvas()">Clear</button>
+        <button onclick="saveAsImage()">Export Drawing</button>
+    </div>
+
+    <div id="pdf-container">
+        <canvas id="pdf-canvas"></canvas>
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>
+        const urlBase = "https://boobalootoo.github.io/pastpapers/";
+        const pdfCanvas = document.getElementById('pdf-canvas');
+        const overlay = document.getElementById('overlay');
+        const ctx = overlay.getContext('2d');
+        const pageInfo = document.getElementById('pageInfo');
+
+        let pdfDoc = null;
+        let currentPage = 1;
+        let totalPages = 0;
+        let scale = 1.5;
+
+        // Drawing vars
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+
+        overlay.addEventListener('mousedown', e => {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        });
+
+        overlay.addEventListener('mousemove', e => {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.strokeStyle = document.getElementById("penColor").value;
+            ctx.lineWidth = document.getElementById("penWidth").value;
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        });
+
+        overlay.addEventListener('mouseup', () => isDrawing = false);
+        overlay.addEventListener('mouseout', () => isDrawing = false);
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+        }
+
+        function setupOverlay() {
+            overlay.width = pdfCanvas.width;
+            overlay.height = pdfCanvas.height;
+        }
+
+        function saveAsImage() {
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = pdfCanvas.width;
+            tempCanvas.height = pdfCanvas.height;
+
+            const tempCtx = tempCanvas.getContext("2d");
+            tempCtx.drawImage(pdfCanvas, 0, 0);
+            tempCtx.drawImage(overlay, 0, 0);
+
+            const img = tempCanvas.toDataURL("image/png");
+
+            const link = document.createElement("a");
+            link.href = img;
+            link.download = `annotated_page_${currentPage}.png`;
+            link.click();
+        }
+
+        async function loadPDF(url) {
+            pdfDoc = await pdfjsLib.getDocument(url).promise;
+            totalPages = pdfDoc.numPages;
+            currentPage = 1;
+            renderPage(currentPage);
+        }
+
+        async function renderPage(num) {
+            const page = await pdfDoc.getPage(num);
+            const viewport = page.getViewport({ scale });
+            const context = pdfCanvas.getContext('2d');
+
+            pdfCanvas.width = viewport.width;
+            pdfCanvas.height = viewport.height;
+
+            overlay.width = viewport.width;
+            overlay.height = viewport.height;
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            const renderContext = {
+                canvasContext: context,
+                viewport
+            };
+            await page.render(renderContext).promise;
+            setupOverlay();
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderPage(currentPage);
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderPage(currentPage);
+            }
+        }
+
+        document.getElementById('pdfSelector').addEventListener('change', function () {
+            const selectedFile = this.value;
+            loadPDF(urlBase + encodeURIComponent(selectedFile));
+        });
+
+        // Initial load
+        loadPDF(urlBase + encodeURIComponent(document.getElementById('pdfSelector').value));
+    </script>
+</body>
+</html>
