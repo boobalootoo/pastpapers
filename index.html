@@ -1,22 +1,177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Display PDF</title>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Files in Repository</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        li {
+            margin-bottom: 15px;
+        }
+        a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .loading {
+            color: #666;
+        }
+        .error {
+            color: #ff0000;
+            font-weight: bold;
+        }
+        .section-title {
+            margin-top: 30px;
+            font-size: 20px;
+            font-weight: bold;
+            border-bottom: 2px solid #0366d6;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .file-pair {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px;
+        }
+        .file-link {
+            display: block;
+            color: #0366d6;
+            text-decoration: none;
+            margin-bottom: 5px;
+        }
+        .file-link:hover {
+            text-decoration: underline;
+        }
+        .question-paper-link {
+            font-weight: bold;
+        }
+        .mark-scheme-link {
+            font-style: italic;
+            color: #888;
+        }
+    </style>
 </head>
 <body>
-  <iframe src="https://boobalootoo.github.io/pastpapers/Computational%20thinking,%20algorithms%20and%20programming%202018.pdf"></iframe>
+    <h1>PDF Files in Repository</h1>
+    <div id="loading" class="loading">Loading PDF files...</div>
+    <div id="error" class="error" style="display:none;"></div>
+
+    <h2 class="section-title">Computational thinking, algorithms and programming</h2>
+    <div id="ctap-files"></div>
+
+    <h2 class="section-title">Computer systems</h2>
+    <div id="cs-files"></div>
+
+    <script>
+        const repoOwner = "boobalootoo";
+        const repoName = "pastpapers";
+        const baseUrl = `https://${repoOwner}.github.io/${repoName}/`;
+
+        const ctapFilesContainer = document.getElementById("ctap-files");
+        const csFilesContainer = document.getElementById("cs-files");
+        const loadingIndicator = document.getElementById("loading");
+        const errorDisplay = document.getElementById("error");
+
+        async function getRepoFiles() {
+            try {
+                const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents`);
+                if (!response.ok) {
+                    throw new Error(`GitHub API error: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                loadingIndicator.style.display = "none";
+                errorDisplay.style.display = "block";
+                errorDisplay.textContent = `Error: ${error.message}`;
+                console.error("Error fetching repository files:", error);
+                return [];
+            }
+        }
+
+        function createAndAppendFilePair(container, questionPaper, markScheme) {
+            const filePairDiv = document.createElement("div");
+            filePairDiv.className = "file-pair";
+
+            if (questionPaper) {
+                const questionPaperLink = document.createElement("a");
+                questionPaperLink.href = baseUrl + encodeURIComponent(questionPaper.name);
+                questionPaperLink.target = "_blank";
+                questionPaperLink.textContent = questionPaper.name;
+                questionPaperLink.className = "file-link question-paper-link";
+                filePairDiv.appendChild(questionPaperLink);
+            }
+
+            if (markScheme) {
+                const markSchemeLink = document.createElement("a");
+                markSchemeLink.href = baseUrl + encodeURIComponent(markScheme.name);
+                markSchemeLink.target = "_blank";
+                markSchemeLink.textContent = markScheme.name;
+                markSchemeLink.className = "file-link mark-scheme-link";
+                filePairDiv.appendChild(markSchemeLink);
+            }
+
+            container.appendChild(filePairDiv);
+        }
+
+        async function displayPdfFiles() {
+            const files = await getRepoFiles();
+            loadingIndicator.style.display = "none";
+
+            const ctapFiles = files.filter(file =>
+                file.name.toLowerCase().includes("computational thinking") && file.name.toLowerCase().endsWith(".pdf")
+            );
+
+            const csFiles = files.filter(file =>
+                file.name.toLowerCase().includes("computer systems") && file.name.toLowerCase().endsWith(".pdf")
+            );
+
+            function displayCategory(files, container) {
+                const displayedPairs = new Set();
+
+                files.forEach(file => {
+                    if (file.name.toLowerCase().includes("mark scheme")) {
+                        const questionPaperName = file.name.toLowerCase().replace("mark scheme ", "");
+                        const matchingQuestionPaper = files.find(q =>
+                            q.name.toLowerCase() === questionPaperName
+                        );
+
+                        if (matchingQuestionPaper && !displayedPairs.has(matchingQuestionPaper.name)) {
+                            createAndAppendFilePair(container, matchingQuestionPaper, file);
+                            displayedPairs.add(matchingQuestionPaper.name);
+                        }
+                    }
+                });
+
+                files.forEach(file => {
+                    if (!file.name.toLowerCase().includes("mark scheme") && !displayedPairs.has(file.name)) {
+                        createAndAppendFilePair(container, file, null);
+                    }
+                });
+
+                if (files.length === 0) {
+                    container.textContent = "No PDF files found in this category.";
+                }
+            }
+
+            displayCategory(ctapFiles, ctapFilesContainer);
+            displayCategory(csFiles, csFilesContainer);
+        }
+
+        displayPdfFiles();
+    </script>
 </body>
 </html>
